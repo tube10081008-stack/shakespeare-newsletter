@@ -57,6 +57,7 @@ async def generate_issue():
 
     # Determine Theme based on current day
     weekday = datetime.today().weekday()
+    # weekday = 1 # FORCED TUESDAY
     theme = THEMES[weekday]
     
     print(f"Generate Issue for {theme['name']}...")

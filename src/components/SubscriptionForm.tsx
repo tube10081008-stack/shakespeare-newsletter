@@ -11,11 +11,24 @@ export default function SubscriptionForm() {
         e.preventDefault();
         setStatus('loading');
 
-        // Simulate API call
-        setTimeout(() => {
+        try {
+            const res = await fetch('/api/subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email }),
+            });
+
+            if (!res.ok) throw new Error('Subscription failed');
+
             setStatus('success');
             setEmail('');
-        }, 1500);
+        } catch (error) {
+            console.error(error);
+            setStatus('error');
+            alert('구독 신청 중 오류가 발생했습니다. 다시 시도해주세요.');
+        } finally {
+            if (status !== 'success') setStatus('idle');
+        }
     };
 
     if (status === 'success') {

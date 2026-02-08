@@ -1,14 +1,8 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
+import { Resend } from 'resend';
 
-const DATA_DIR = path.join(process.cwd(), 'src', 'data');
-const SUBSCRIBERS_FILE = path.join(DATA_DIR, 'subscribers.json');
-
-// Ensure data directory exists
-if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-}
+const resend = new Resend(process.env.RESEND_API_KEY);
+const AUDIENCE_ID = process.env.RESEND_AUDIENCE_ID;
 
 export async function POST(request: Request) {
     try {
@@ -21,27 +15,30 @@ export async function POST(request: Request) {
             );
         }
 
-        // Read existing subscribers
-        let subscribers: string[] = [];
-        if (fs.existsSync(SUBSCRIBERS_FILE)) {
-            const data = fs.readFileSync(SUBSCRIBERS_FILE, 'utf-8');
-            try {
-                subscribers = JSON.parse(data);
-            } catch (e) {
-                subscribers = [];
-            }
+        if (!AUDIENCE_ID) {
+            console.error('RESEND_AUDIENCE_ID is not defined');
+            return NextResponse.json(
+                { error: 'Server configuration error' },
+                { status: 500 }
+            );
         }
 
-        // Add new subscriber if not exists
-        if (!subscribers.includes(email)) {
-            subscribers.push(email);
-            fs.writeFileSync(SUBSCRIBERS_FILE, JSON.stringify(subscribers, null, 2));
-            console.log(`[DB] Saved Subscriber: ${email}`);
-        } else {
-            console.log(`[DB] Subscriber already exists: ${email}`);
+        try {
+            await resend.contacts.create({
+                email: email,
+                firstName: '',
+                lastName: '',
+                unsubscribed: false,
+                audienceId: AUDIENCE_ID,
+            });
+            console.log(`[Resend] Subscribed: ${email}`);
+            return NextResponse.json({ success: true, message: 'Subscribed successfully' });
+        } catch (error) {
+            console.error('[Resend] Subscription Error:', error);
+            // Resend throws if already exists, handle gracefully if needed, or just return success
+            return NextResponse.json({ success: true, message: 'Subscribed successfully (or updated)' });
         }
 
-        return NextResponse.json({ success: true, message: 'Subscribed successfully' });
     } catch (error) {
         console.error('Subscription Error:', error);
         return NextResponse.json(

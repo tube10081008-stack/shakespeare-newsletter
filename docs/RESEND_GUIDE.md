@@ -20,10 +20,32 @@ Sandbox 모드에서는 **계정을 생성할 때 사용한 본인 이메일**�
 - **남에게 발송**: `Domains` 메뉴에서 도메인 연결 필수.
 
 
-## 2. Domain 인증하기 (발신자 인증 - 권장)
-`onboarding@resend.dev` 대신 `newsletter@myproject.com` 처럼 멋진 도메인으로 보내려면:
-1.  [Resend Dashboard - Domains](https://resend.com/domains) 페이지로 이동합니다.
-2.  **Add Domain**을 클릭하고 보유한 도메인(예: `daily-bard.com`)을 입력합니다.
-3.  화면에 나오는 **DNS 레코드(DKIM, SPF 등)**를 도메인 관리 사이트(가비아, GoDaddy, AWS Route53 등)에 입력합니다.
-4.  설정이 완료되면 `Status: Verified`가 뜹니다.
-5.  이제 `.env` 파일의 `SENDER_EMAIL`을 `Shakespeare <hello@daily-bard.com>` 등으로 변경할 수 있습니다.
+## 2. 도메인 인증하기 (발신자 인증 - 권장)
+`onboarding@resend.dev` 대신 `newsletter@daily-shakespeare.site` 처럼 멋진 도메인으로 보내려면:
+
+1.  **Resend Dashboard > Domains > Add Domain** 클릭.
+2.  `daily-shakespeare.site` 입력 후 **Add**.
+3.  화면에 **DNS Records** (MX, TXT)가 나옵니다. 이 값을 도메인 관리 페이지에 "복사-붙여넣기" 해야 합니다.
+
+### 💡 도메인 관리 페이지 입력 방법
+보내주신 화면(가비아/호스팅KR 등)의 입력칸에 이렇게 넣으세요:
+
+**[공통]**
+*   **TTL**: 600 (그대로 두세요)
+*   **추가/확인 버튼**: 입력 후 반드시 '추가' 또는 '확인'을 눌러야 저장됩니다.
+
+**1. MX 레코드 (메일 수신용)**
+*   **타입**: `MX` 선택
+*   **호스트**: Resend의 `Name` 값 (보통 `bounces` 또는 `@`)
+*   **값/위치**: Resend의 `Value` 값 (예: `feedback-smtp.us-east-1.amazonses.com`)
+*   **우선순위**: `10`
+
+**2. TXT 레코드 (SPF/DKIM 인증 - 가장 중요!)**
+*   **타입**: `TXT` 선택
+*   **호스트**: Resend의 `Name` 값 (예: `bounces` 또는 `resend._domainkey`)
+*   **값/위치**: Resend의 `Value` 값 (예: `v=spf1 include:...` 또는 `p=MIGf...`)
+*   **우선순위**: (비워둠)
+
+**주의사항:**
+*   **호스트(Name)** 입력 시, `bounces.daily-shakespeare.site` 처럼 전체가 나오더라도, 입력칸에는 `bounces`만 넣어야 할 수 있습니다. (자동으로 뒤에 도메인이 붙는 경우가 많음)
+*   입력 후 **Verify Status** 버튼을 눌러 `Verified`가 뜰 때까지 기다리세요 (최대 48시간, 보통 10분 내 완료).

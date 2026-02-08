@@ -53,15 +53,36 @@ async def dispatch():
         f.write(html_body)
     print(f"💾 [Dispatcher] Email preview saved to: {html_path}")
 
-    # 4. Read Subscribers
-    subscribers_file = os.path.join(os.path.dirname(__file__), "../src/data/subscribers.json")
-    subscribers = []
-    if os.path.exists(subscribers_file):
-        with open(subscribers_file, "r") as f:
-            try:
-                subscribers = json.load(f)
-            except:
-                pass
+    # 4. Fetch Subscribers (from Resend Audience)
+    AUDIENCE_ID = os.getenv("RESEND_AUDIENCE_ID")
+    if not AUDIENCE_ID:
+        print("❌ Error: RESEND_AUDIENCE_ID not found in .env")
+        return
+
+    print(f"📋 [Dispatcher] Fetching subscribers from Audience: {AUDIENCE_ID}...")
+    try:
+        contacts_response = resend.Contacts.list(audience_id=AUDIENCE_ID)
+        
+        # Handle response structure
+        if isinstance(contacts_response, dict) and 'data' in contacts_response:
+             contacts = contacts_response['data']
+        elif isinstance(contacts_response, list):
+             contacts = contacts_response
+        else:
+             contacts = []
+
+        # Filter out unsubscribed
+        subscribers = [c['email'] for c in contacts if not c.get('unsubscribed', False)]
+        
+        if not subscribers:
+            print("⚠️ [Dispatcher] No active subscribers found in Audience.")
+            # return # Optional: Stop if nobody to send to
+        else:
+            print(f"✅ Found {len(subscribers)} active subscribers.")
+
+    except Exception as e:
+        print(f"❌ [Dispatcher] Failed to fetch audience: {e}")
+        return
     
     # Add a fallback for testing if list is empty
     if not subscribers:
