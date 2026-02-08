@@ -50,40 +50,44 @@ THEMES = {
 }
 
 async def generate_issue():
-    uv_path = r"C:\Users\tube1\.local\bin\uv.exe"
-    if not os.path.exists(uv_path):
-        print(json.dumps({"error": "UV not found"}))
-        return
-
+    # Use 'uv' from PATH based on OS
+    uv_path = "uv" # In GitHub Actions, uv is installed to PATH
+    
     # Determine Theme based on current day (KST)
-    # Server might be UTC, so we add 9 hours manually
     from datetime import timedelta
     kst_now = datetime.utcnow() + timedelta(hours=9)
     weekday = kst_now.weekday()
-    theme = THEMES[weekday]
+    theme = THEMES.get(weekday, THEMES[0])
     
     print(f"Generate Issue for {theme['name']}...")
 
-    cmd = [uv_path, "tool", "run", "--from", "notebooklm-mcp-server", "notebooklm-mcp"]
-    
-    process = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE
-    )
+    try:
+        cmd = [uv_path, "tool", "run", "--from", "notebooklm-mcp-server", "notebooklm-mcp"]
+        
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+    except FileNotFoundError:
+        print("⚠️ 'uv' command not found. Using fallback content.")
+        return create_fallback_issue(theme)
 
     async def read_response():
-        while True:
-            line = await process.stdout.readline()
-            if not line:
-                break
-            line_str = line.decode().strip()
-            if not line_str:
-                continue
-            if not line_str.startswith('{'):
-                continue
-            return json.loads(line_str)
+        try:
+            while True:
+                line = await process.stdout.readline()
+                if not line:
+                    break
+                line_str = line.decode().strip()
+                if not line_str:
+                    continue
+                if not line_str.startswith('{'):
+                    continue
+                return json.loads(line_str)
+        except Exception:
+            return None
 
     async def send_request(method, params=None):
         req_id = str(uuid.uuid4())
@@ -101,6 +105,13 @@ async def generate_issue():
         return req_id
 
     try:
+        # Initialize (might fail if auth is required and not present)
+        # In cloud, this interaction is risky without stored credentials.
+        # We will wrap this in a timeout/try block.
+        print("   [Gen] Initializing MCP...")
+        init_id = await send_request("notifications/initialized")
+        
+        # ... logic continues ...
         # Initialize
         init_id = await send_request("initialize", {
             "clientInfo": {"name": "kodari-generator", "version": "1.0"},
@@ -219,13 +230,53 @@ async def generate_issue():
                 break
 
     except Exception as e:
-        print(json.dumps({"error": str(e)}))
+        print(f"❌ [Gen] Generation failed (using fallback): {str(e)}")
+        return create_fallback_issue(theme)
     finally:
         try:
             process.terminate()
             await process.wait()
         except:
             pass
+
+def create_fallback_issue(theme):
+    """Fallback content when AI generation fails (e.g. CI/CD)"""
+    print(f"⚠️ Generating fallback content for {theme['name']}")
+    
+    # Save a default JSON
+    fallback_data = {
+        "title": f"{theme['name']} (Classic)",
+        "intro": "오늘은 AI Bard가 잠시 휴식을 취하고 있습니다. 대신 셰익스피어의 불멸의 고전을 원문 그대로 전해드립니다.",
+        "quote": {
+            "text": "All the world's a stage,\nAnd all the men and women merely players.",
+            "translation": "온 세상은 무대요,\n모든 남녀는 그저 배우일 뿐이다.",
+            "source": "As You Like It, Jaques"
+        },
+        "insight": {
+            "context": "인생을 연극에 비유한 이 유명한 독백은 우리가 각자의 시기에 맞춰 다양한 역할을 수행하며 살아감을 이야기합니다.",
+            "interpretation": "지금 당신은 어떤 배역을 맡고 있나요? 주인공이든 조연이든, 당신의 연기는 그 자체로 의미가 있습니다.",
+            "action": "오늘 하루, 내 인생이라는 연극의 '작가'가 되어 대본을 직접 써보세요."
+        },
+        "second_perspective": {
+            "title": "Macbeth's Shadow",
+            "content": "Life's but a walking shadow, a poor player... (인생은 걸어다니는 그림자일 뿐...)"
+        },
+        "weekly_preview": [
+            "Tuesday: Romance",
+            "Wednesday: Wit"
+        ],
+        "meta": {
+            "date": datetime.now().strftime("%Y-%m-%d"),
+            "theme": theme['name'],
+            "generated_at": time.time(),
+            "is_fallback": True
+        }
+    }
+    
+    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+        json.dump(fallback_data, f, ensure_ascii=False, indent=2)
+    
+    return fallback_data
 
 if __name__ == "__main__":
     asyncio.run(generate_issue())
