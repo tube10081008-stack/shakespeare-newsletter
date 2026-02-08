@@ -29,6 +29,7 @@ jobs:
       - name: Run Dispatcher
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RESEND_AUDIENCE_ID: ${{ secrets.RESEND_AUDIENCE_ID }}
           SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
           # Note: If NotebookLM requires local auth, this step might need a mock generation or credentials.
           # For MVP, we will run the dispatch script.

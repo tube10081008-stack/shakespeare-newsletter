@@ -55,9 +55,11 @@ async def generate_issue():
         print(json.dumps({"error": "UV not found"}))
         return
 
-    # Determine Theme based on current day
-    weekday = datetime.today().weekday()
-    # weekday = 1 # FORCED TUESDAY
+    # Determine Theme based on current day (KST)
+    # Server might be UTC, so we add 9 hours manually
+    from datetime import timedelta
+    kst_now = datetime.utcnow() + timedelta(hours=9)
+    weekday = kst_now.weekday()
     theme = THEMES[weekday]
     
     print(f"Generate Issue for {theme['name']}...")
