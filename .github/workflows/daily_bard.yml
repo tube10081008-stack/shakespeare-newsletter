@@ -1,0 +1,37 @@
+name: "The Daily Bard Dispatcher"
+
+on:
+  schedule:
+    # Runs at 22:00 UTC everyday (07:00 AM KST)
+    - cron: '0 22 * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Install Dependencies
+        run: |
+          pip install resend python-dotenv nest_asyncio
+
+      - name: Run Dispatcher
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+          # Note: If NotebookLM requires local auth, this step might need a mock generation or credentials.
+          # For MVP, we will run the dispatch script.
+        run: |
+          # We use python directly as dependencies are installed via pip in the environment
+          python scripts/dispatch_newsletter.py

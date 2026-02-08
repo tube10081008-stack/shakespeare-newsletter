@@ -1,0 +1,20 @@
+[
+    {
+        "id": 1,
+        "play": "Hamlet",
+        "quote": "To be, or not to be, that is the question.",
+        "analysis": "Hamlet's contemplation of existence vs. non-existence..."
+    },
+    {
+        "id": 2,
+        "play": "Macbeth",
+        "quote": "By the pricking of my thumbs, Something wicked this way comes.",
+        "analysis": " The Witches' prophecy foretells Macbeth's doom..."
+    },
+    {
+        "id": 3,
+        "play": "Romeo and Juliet",
+        "quote": "Parting is such sweet sorrow.",
+        "analysis": "The oxymoron captures the complex emotion of love..."
+    }
+]
