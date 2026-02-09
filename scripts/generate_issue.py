@@ -184,10 +184,20 @@ async def generate_issue():
             }
         })
 
-        # Wait for response
+        # Wait for response (Timeout set to 15 seconds to trigger fallback quickly if stuck)
+        start_wait = time.time()
         while True:
-            resp = await read_response()
-            if resp and resp.get("id") == req_id:
+            # If generating takes > 60s, we might get a TimeoutError from wait_for.
+            # But here we just check in the loop.
+            try:
+                resp = await asyncio.wait_for(read_response(), timeout=60.0)
+            except asyncio.TimeoutError:
+                raise Exception("Generation timed out")
+
+            if resp is None:
+                raise Exception("Subprocess exited unexpectedly during generation")
+
+            if resp.get("id") == req_id:
                 if "error" in resp:
                     print(json.dumps({"error": resp['error']}))
                 else:
