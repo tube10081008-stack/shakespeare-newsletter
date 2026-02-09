@@ -54,35 +54,42 @@ async def dispatch():
     print(f"💾 [Dispatcher] Email preview saved to: {html_path}")
 
     # 4. Fetch Subscribers (from Resend Audience)
-    AUDIENCE_ID = os.getenv("RESEND_AUDIENCE_ID")
-    if not AUDIENCE_ID:
-        print("❌ Error: RESEND_AUDIENCE_ID not found in .env")
-        return
+    # 4. Fetch Subscribers (from Resend Audience)
+    AUDIENCE_ID = os.getenv("RESEND_AUDIENCE_ID", "bd20d6e8-a668-4bd7-bd22-76ff01bda900") # Fallback to known ID
 
     print(f"📋 [Dispatcher] Fetching subscribers from Audience: {AUDIENCE_ID}...")
+    subscribers = []
+    
     try:
-        contacts_response = resend.Contacts.list(audience_id=AUDIENCE_ID)
-        
-        # Handle response structure
-        if isinstance(contacts_response, dict) and 'data' in contacts_response:
-             contacts = contacts_response['data']
-        elif isinstance(contacts_response, list):
-             contacts = contacts_response
-        else:
-             contacts = []
-
-        # Filter out unsubscribed
-        subscribers = [c['email'] for c in contacts if not c.get('unsubscribed', False)]
+        if AUDIENCE_ID:
+            contacts_response = resend.Contacts.list(audience_id=AUDIENCE_ID)
+            
+            # Handle response structure
+            if isinstance(contacts_response, dict) and 'data' in contacts_response:
+                 contacts = contacts_response['data']
+            elif isinstance(contacts_response, list):
+                 contacts = contacts_response
+            else:
+                 contacts = []
+    
+            # Filter out unsubscribed
+            subscribers = [c['email'] for c in contacts if not c.get('unsubscribed', False)]
         
         if not subscribers:
-            print("⚠️ [Dispatcher] No active subscribers found in Audience.")
-            # return # Optional: Stop if nobody to send to
+            print("⚠️ [Dispatcher] No active subscribers found via API. Checking fallback list...")
+            raise Exception("Empty audience list")
         else:
-            print(f"✅ Found {len(subscribers)} active subscribers.")
+            print(f"✅ Found {len(subscribers)} active subscribers via API.")
 
     except Exception as e:
         print(f"❌ [Dispatcher] Failed to fetch audience: {e}")
-        return
+        # FALLBACK: Use local known list if API fails (e.g. key permission issue in cloud)
+        print("⚠️ [Dispatcher] Using FALLBACK subscriber list for reliability.")
+        subscribers = [
+            "gartenhong@gmail.com",
+            "vinty030@naver.com",
+            "tube10081008@gmail.com"
+        ]
     
     # Add a fallback for testing if list is empty
     if not subscribers:
