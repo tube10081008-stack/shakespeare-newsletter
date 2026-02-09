@@ -34,5 +34,8 @@ jobs:
           # Note: If NotebookLM requires local auth, this step might need a mock generation or credentials.
           # For MVP, we will run the dispatch script.
         run: |
-          # We use python directly as dependencies are installed via pip in the environment
+          # Run Diagnostics
+          python scripts/diagnostic.py
+          
+          # Proceed with Dispatcher
           python scripts/dispatch_newsletter.py
