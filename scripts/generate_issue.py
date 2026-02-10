@@ -50,14 +50,21 @@ THEMES = {
 }
 
 async def generate_issue():
-    # Use 'uv' from PATH based on OS
-    uv_path = "uv" # In GitHub Actions, uv is installed to PATH
-    
     # Determine Theme based on current day (KST)
     from datetime import timedelta
     kst_now = datetime.utcnow() + timedelta(hours=9)
     weekday = kst_now.weekday()
     theme = THEMES.get(weekday, THEMES[0])
+    
+    # 1. Cloud-Specific Logic: Force Fallback in GitHub Actions
+    # (Since NotebookLM auth isn't available in ephemeral CI runners)
+    if os.getenv("GITHUB_ACTIONS") == "true":
+        print("🤖 [Gen] Detected GitHub Actions environment.")
+        print("⚠️ [Gen] Skipping AI generation (no auth). Using High-Quality Fallback.")
+        return create_fallback_issue(theme)
+
+    # Use 'uv' from PATH based on OS
+    uv_path = "uv" # In GitHub Actions, uv is installed to PATH
     
     print(f"Generate Issue for {theme['name']}...")
 
