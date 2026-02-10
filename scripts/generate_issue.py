@@ -56,206 +56,113 @@ async def generate_issue():
     weekday = kst_now.weekday()
     theme = THEMES.get(weekday, THEMES[0])
     
-    # 1. Cloud-Specific Logic: Force Fallback in GitHub Actions
-    # (Since NotebookLM auth isn't available in ephemeral CI runners)
-    if os.getenv("GITHUB_ACTIONS") == "true":
-        print("🤖 [Gen] Detected GitHub Actions environment.")
-        print("⚠️ [Gen] Skipping AI generation (no auth). Using High-Quality Fallback.")
-        return create_fallback_issue(theme)
-
-    # Use 'uv' from PATH based on OS
-    uv_path = "uv" # In GitHub Actions, uv is installed to PATH
+    # 1. Setup Gemini API
+    import google.generativeai as genai
     
-    print(f"Generate Issue for {theme['name']}...")
-
-    try:
-        cmd = [uv_path, "tool", "run", "--from", "notebooklm-mcp-server", "notebooklm-mcp"]
-        
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-    except FileNotFoundError:
-        print("⚠️ 'uv' command not found. Using fallback content.")
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        print("⚠️ [Gen] GEMINI_API_KEY not found. Using Fallback Anthology.")
         return create_fallback_issue(theme)
 
-    async def read_response():
-        try:
-            while True:
-                line = await process.stdout.readline()
-                if not line:
-                    break
-                line_str = line.decode().strip()
-                if not line_str:
-                    continue
-                if not line_str.startswith('{'):
-                    continue
-                return json.loads(line_str)
-        except Exception:
-            return None
+    genai.configure(api_key=api_key)
+    
+    # 2. Construct "Deep Scholarship" Prompt (Emulating the 45 Sources)
+    # We instruct Gemini to access its latent knowledge of specific scholarly editions.
+    
+    system_instruction = """
+    You are 'The Daily Bard', the world's most prestigious Shakespearean newsletter editor.
+    
+    [CRITICAL SOURCE COMPLIANCE]
+    You must generate content based on the depth and rigor equivalent to the following "45 Core Sources":
+    - The First Folio (1623) original text accuracy.
+    - The Arden Shakespeare (3rd Series) critical footnotes.
+    - Semantic analysis from 'The Oxford Shakespeare'.
+    - Historical context from Elizabethan era records.
+    
+    DO NOT generate generic or superficial interpretations.
+    Every 'Insight' must be grounded in specific literary nuance or historical fact.
+    """
+    
+    prompt = f"""
+    {system_instruction}
 
-    async def send_request(method, params=None):
-        req_id = str(uuid.uuid4())
-        req = {
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "method": method
-        }
-        if params is not None:
-            req["params"] = params
-        
-        msg = json.dumps(req) + "\n"
-        process.stdin.write(msg.encode())
-        await process.stdin.drain()
-        return req_id
+    [Today's Theme]: {theme['name']}
+    [Focus Work]: {theme['focus']}
+    [Description]: {theme['description']}
 
+    [Structure Requirements]
+    1. **Header**: Brief, evocative greeting.
+    2. **Quote**: English (Original Folio text) + Korean (Poetic translation).
+    3. **Insight**:
+       - Context: Explain the specific scene/act background deeply.
+       - Reinterpretation: Connect it to modern life leadership/psychology.
+       - Action: A concrete, sophisticated action item.
+    4. **Perspective**: A contrasting view from another character.
+    5. **Preview**: Tease next themes.
+
+    [Output Format]
+    Return ONLY raw JSON. No markdown formatting.
+    {{
+        "title": "{theme['name']}",
+        "intro": "...",
+        "quote": {{
+            "text": "...",
+            "translation": "...",
+            "source": "Act X, Scene Y"
+        }},
+        "insight": {{
+            "context": "...",
+            "interpretation": "...",
+            "action": "..."
+        }},
+        "second_perspective": {{
+            "title": "...",
+            "content": "..."
+        }},
+        "weekly_preview": ["...", "..."]
+    }}
+    """
+    
+    print(f"✨ [Gen] Asking Gemini Pro (The Real Bard) to write for {theme['name']}...")
+    
     try:
-        # Initialize (might fail if auth is required and not present)
-        # In cloud, this interaction is risky without stored credentials.
-        # We will wrap this in a timeout/try block.
-        print("   [Gen] Initializing MCP...")
-        init_id = await send_request("notifications/initialized")
+        model = genai.GenerativeModel('gemini-pro')
+        response = await asyncio.to_thread(
+            model.generate_content,
+            prompt,
+            generation_config=genai.GenerationConfig(
+                temperature=0.7,
+                response_mime_type="application/json"
+            )
+        )
         
-        # ... logic continues ...
-        # Initialize
-        init_id = await send_request("initialize", {
-            "clientInfo": {"name": "kodari-generator", "version": "1.0"},
-            "protocolVersion": "2024-11-05", 
-            "capabilities": {}
-        })
-
-        while True:
-            resp = await read_response()
-            if resp and resp.get("id") == init_id:
-                break
+        raw_text = response.text
+        # Clean potential markdown wrapping
+        clean_text = raw_text.replace("```json", "").replace("```", "").strip()
         
-        await send_request("notifications/initialized")
+        data = json.loads(clean_text)
         
-        prompt = f"""
-        당신은 'The Daily Bard'라는 셰익스피어 뉴스레터의 전문 에디터입니다.
-        아래의 요일별 테마와 구조에 맞춰, 독자에게 깊은 울림을 주는 뉴스레터를 작성해주세요.
-
-        [오늘의 테마: {theme['name']}]
-        참고 작품/키워드: {theme['focus']}
-        설명: {theme['description']}
-
-        [작성 구조 (반드시 이 순서와 내용을 지킬 것)]
-        1. **Header (도입부)**:
-           - 독자의 감정을 터치하는 짧은 인사말.
-           - 오늘 테마를 소개하며 독자의 호기심 자극.
-        2. **Quote of the Day (오늘의 명대사)**:
-           - 영어 원문과 한국어 번역 병기.
-           - 출처 (작품명, 화자) 명시.
-        3. **The Insight (통찰)**:
-           - [Context]: 대사의 문학적/상황적 배경 설명.
-           - [Reinterpretation]: 이를 현대적 관점에서 재해석.
-           - [Application]: 독자가 이번 주에 당장 실천할 수 있는 구체적인 행동 제안.
-        4. **Another Perspective (또 다른 시선)**:
-           - 메인 테마와 연결되지만 다른 관점을 가진 셰익스피어의 다른 캐릭터나 대사 소개.
-        5. **Weekly Preview (이번 주 예고)**:
-           - 남은 요일들의 테마를 매력적으로 예고.
-
-        [필수 응답 형식]
-        반드시 아래의 JSON 포맷으로만 응답해야 합니다. 마크다운이나 추가 설명 금지.
-        {{
-            "title": "{theme['name']}",
-            "intro": "도입부 텍스트...",
-            "quote": {{
-                "text": "English Quote...",
-                "translation": "한국어 번역...",
-                "source": "작품명, 화자"
-            }},
-            "insight": {{
-                "context": "문학적 배경...",
-                "interpretation": "현대적 재해석...",
-                "action": "실천 가이드..."
-            }},
-            "second_perspective": {{
-                "title": "캐릭터/주제",
-                "content": "내용..."
-            }},
-            "weekly_preview": [
-                "화요일: ...",
-                "수요일: ..."
-            ]
-        }}
-        """
-
-        req_id = await send_request("tools/call", {
-            "name": "notebook_query",
-            "arguments": {
-                "notebook_id": NOTEBOOK_ID,
-                "query": prompt
-            }
-        })
-
-        # Wait for response (Timeout set to 15 seconds to trigger fallback quickly if stuck)
-        start_wait = time.time()
-        while True:
-            # If generating takes > 60s, we might get a TimeoutError from wait_for.
-            # But here we just check in the loop.
-            try:
-                resp = await asyncio.wait_for(read_response(), timeout=60.0)
-            except asyncio.TimeoutError:
-                raise Exception("Generation timed out")
-
-            if resp is None:
-                raise Exception("Subprocess exited unexpectedly during generation")
-
-            if resp.get("id") == req_id:
-                if "error" in resp:
-                    print(json.dumps({"error": resp['error']}))
-                else:
-                    content = resp.get("result", {}).get("content", [])
-                    found_json = False
-                    for item in content:
-                        if item.get("type") == "text":
-                            raw_text = item["text"]
-                            clean_text = raw_text.replace("```json", "").replace("```", "").strip()
-                            try:
-                                data = json.loads(clean_text)
-                                
-                                # Handle nested JSON in 'answer'
-                                if "answer" in data and isinstance(data["answer"], str):
-                                    try:
-                                        nested = json.loads(data["answer"])
-                                        data = nested
-                                    except:
-                                        pass
-
-                                # Enrich data
-                                data["meta"] = {
-                                    "date": datetime.now().strftime("%Y-%m-%d"),
-                                    "theme": theme['name'],
-                                    "generated_at": time.time()
-                                }
-                                
-                                os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
-                                
-                                with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-                                    json.dump(data, f, indent=2, ensure_ascii=False)
-                                
-                                print(json.dumps(data, ensure_ascii=False))
-                                found_json = True
-                            except json.JSONDecodeError:
-                                print(json.dumps({"error": "Invalid JSON", "raw": raw_text}, ensure_ascii=False))
-                    
-                    if not found_json:
-                         print(json.dumps({"error": "No text content found"}))
-                         return create_fallback_issue(theme)
-                break
+        # Enrich meta data
+        data["meta"] = {
+            "date": datetime.now().strftime("%Y-%m-%d"),
+            "theme": theme['name'],
+            "generated_at": time.time(),
+            "model": "gemini-pro-scholar-mode"
+        }
+        
+        # Save to file
+        os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
+        with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+            
+        print("✅ [Gen] High-Quality content generated successfully.")
+        print(json.dumps(data, indent=2, ensure_ascii=False))
+        return data
 
     except Exception as e:
-        print(f"❌ [Gen] Generation failed (using fallback): {str(e)}")
+        print(f"❌ [Gen] Gemini API failed: {e}")
+        print("⚠️ [Gen] Reverting to Masterpiece Anthology (Fallback).")
         return create_fallback_issue(theme)
-    finally:
-        try:
-            process.terminate()
-            await process.wait()
-        except:
-            pass
 
     return fallback_data
 
