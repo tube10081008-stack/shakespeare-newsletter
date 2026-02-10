@@ -108,16 +108,31 @@ async def dispatch():
 
     # Real Send via Resend
     success_count = 0
+    
+    # Prepare Sender ID
+    # If SENDER_EMAIL is 'Name <email>', use it as is.
+    # If it's just 'email', wrapper it.
+    if "<" in SENDER_EMAIL and ">" in SENDER_EMAIL:
+        from_header = SENDER_EMAIL
+    else:
+        from_header = f"The Daily Bard <{SENDER_EMAIL}>"
+
     for sub in subscribers:
         try:
             params = {
-                "from": "The Daily Bard <" + SENDER_EMAIL + ">",
+                "from": from_header,
                 "to": [sub],
                 "subject": f"📜 {data.get('title', 'The Daily Bard')}",
                 "html": html_body,
             }
             
             email = resend.Emails.send(params)
+            print(f"   [Resend] 📤 Sent to {sub} (ID: {email.get('id')})")
+            success_count += 1
+            
+            # Rate Limiting: Increase to 5s to be absolutely safe against 429
+            print("   [Dispatcher] Sleeping 5s for rate limit...")
+            time.sleep(5.0)
             print(f"   [Resend] 📤 Sent to {sub} (ID: {email.get('id')})")
             success_count += 1
             await asyncio.sleep(0.5) # Rate limiting courtesy
