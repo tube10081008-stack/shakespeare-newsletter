@@ -123,16 +123,20 @@ async def generate_issue():
     }}
     """
     
-    print(f"✨ [Gen] Asking Gemini Pro (The Real Bard) to write for {theme['name']}...")
+    print(f"✨ [Gen] Asking Gemini 3.0 Pro (The Real Bard) to write for {theme['name']}...")
     
     try:
-        model = genai.GenerativeModel('gemini-pro')
+        # User requested the LATEST version (2026 Context).
+        # upgrading to 'gemini-3.0-pro'
+        model = genai.GenerativeModel('gemini-3.0-pro')
+        
         response = await asyncio.to_thread(
             model.generate_content,
             prompt,
             generation_config=genai.GenerationConfig(
                 temperature=0.7,
-                response_mime_type="application/json"
+                # JSON response enforcement
+                response_mime_type="application/json" 
             )
         )
         
