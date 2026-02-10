@@ -237,6 +237,7 @@ async def generate_issue():
                     
                     if not found_json:
                          print(json.dumps({"error": "No text content found"}))
+                         return create_fallback_issue(theme)
                 break
 
     except Exception as e:
